@@ -1,0 +1,495 @@
+---
+title: "code_for_covid_gr_clinics"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Document Notes
+I received this updated dataset from Kostas Kotsis 0n 30th April 2021 (see my other coivd.gr.mediation.Rmd). This is in order to clarify some questions that arose in previous analyses.
+
+Please see the conclusions at the end.
+
+
+```{r, results="hide", message=FALSE}
+library(dplyr)
+# library(data.table)
+library(ggplot2)
+# #library(SummarizedExperiment)
+# #library(ggstatsplot)
+# #library(ggpubr)
+library(tidyverse)
+library(patchwork)
+library(tidyr)
+# library(broom)
+# library(broom.mixed)
+# library(gmodels)
+# library(ggthemes)
+# library(SuppDists)
+# library(questionr)
+library(rsample)
+# library(zoo)
+# library(pracma)
+# library(Metrics)
+library(gplots)
+# library(gmodels)
+ library(lme4)
+ library(nlme)
+# library(kableExtra)
+library(psych)
+# library(car)
+# library(eply)
+# library(sjmisc)
+library(cowplot)
+library(lavaan)
+library(semPlot)
+library(semTools)
+results = "hide"
+```
+
+# Brief Summary of Results so far
+
+- I have answered questions 1 and 2 below. 
+- Overall, **there is no increase in mood scores during the pandemic**
+- The **age by time interaction effect is not significant** at least in the train data that we have here
+- The age by time interaction seems to add quite little on top of the addition of age, though the R2 difference of the models does seem to be significant.
+- Remember, I have analysed a 60% split of the data here, treating this as a discovery sample. 
+- Given all this, my suggestion to you would be to **write a descriptive paper** as opposed to insist on inference. 
+- There is a lot to describe here and we could do this quite nicely.
+- If you prefer on writing a paper with inferences such as that of an interaction by age, and you need to use the whole data, I would ask that we do two things: 
+a) that we use bootstrap (or some other re-sampling or cross-validation method); b) that we explain that what we do/find is to be treated as preliminary.
+
+
+
+**Here are questions that I discussed with Kostas Kotsis**
+
+- Q1 has mood state changed before and during the pandemic defined as change from 3mo to BL
+- Q2 does age moderate this effect? Age defined as split by <12 vs >=12
+- Q3 does diagnosis moderate this effect? Diagnosis defined as Int, Ext, ASD, Spec Dev (exclude the others)
+- Q4 does gender moderate this effect? Gender as a binary variable 
+
+All these analyses as single interaction effects with possible f/up for confounding. 
+note ns will differ between those questions because of restrictions with diagnosis.
+These are by no means easy questions. 
+I thought today that we should probably control for site when we do our analyses, which means changing the random effects structure of our LME.
+
+**import dataset that was sent to me on 26th April.**
+```{r}
+ # Make sure to change source to yours
+covid_gr_clinics <- read.csv("~/Downloads/COVIDparents_final_IOANNA_1_KK_AG.csv", sep=";", comment.char="#")
+```
+
+**select variables to retain**
+```{r}
+covid_gr_clinics <- covid_gr_clinics%>%
+  select(id, family_id, MOOD_STATES_base, MOOD_STATES_3m, age_D, site, Diagnosis_FINAL_groups_revised,            
+  Diagnosis_FINAL_groups_revised_rec)
+```
+
+**Rename the variables to fit the previous code**
+```{r, include=  FALSE}
+
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, MD_ST_B = MOOD_STATES_base)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, MD_ST_3m = MOOD_STATES_3m)
+```
+
+
+**Split the dataset into a 60-40 for further work**
+```{r}
+set.seed(1234)
+split_covid_gr_clinics <- initial_split(covid_gr_clinics, 0.6)
+covid_gr_clinics_train <- training(split_covid_gr_clinics)
+covid_gr_clinics_test <- testing(split_covid_gr_clinics)
+```
+
+**Turn wide dataframe to long for plotting**
+```{r}
+covid_gr_clinics_train_long<- gather(covid_gr_clinics_train, time_point, mood_score, MD_ST_B, MD_ST_3m)
+```
+
+
+# PART I: Summary Statistics
+
+**Plot histogram of data by group and look at summary statistics**
+
+- Plot overall
+```{r message=FALSE}
+
+covid_gr_clinics_train_long %>% 
+  ggplot(aes(x=mood_score,fill=time_point)) + 
+  geom_histogram(position="dodge") +
+   ggtitle("Mood Before and During the Pandemic")
+
+
+
+#results = "hide"
+```
+
+- Summary Statistics overall
+```{r}
+  summary_stats <- covid_gr_clinics_train_long %>%
+  group_by(time_point)
+  
+  #have to use awkward :: syntax because of some package overlap problem
+  summary_stats <- dplyr::summarise(summary_stats, n = n(), median = 
+                                             median(mood_score, na.rm = T),
+            mean = mean(mood_score, na.rm =T), sd = sd(mood_score, na.rm =T), 
+            quantile_25 = quantile(mood_score, probs = c(0.25)), 
+            quantile_75 = quantile(mood_score, probs = c(0.75)))
+
+summary_stats 
+```
+This suggests that there is no difference overall
+
+
+- Plot by age
+```{r message=FALSE}
+
+covid_gr_clinics_train_long %>% 
+  ggplot(aes(x=mood_score,fill=time_point)) + 
+  geom_histogram(position="dodge") +
+  facet_wrap(~age_D)+
+   ggtitle("Mood Before and During the Pandemic by Age")
+#results = "hide"
+```
+
+- Summary Stats by Age
+```{r message=FALSE}
+  summary_stats_by_age <- covid_gr_clinics_train_long %>%
+  group_by(time_point, age_D)
+  
+  #have to use awkward :: syntax because of some package overlap problem
+  summary_stats_by_age <- dplyr::summarise(summary_stats_by_age, n = n(), median = 
+                                             median(mood_score, na.rm = T),
+            mean = mean(mood_score, na.rm =T), sd = sd(mood_score, na.rm =T), 
+            quantile_25 = quantile(mood_score, probs = c(0.25)), 
+            quantile_75 = quantile(mood_score, probs = c(0.75)))
+
+summary_stats_by_age 
+```
+
+
+Two things seem obvious. 
+- the distributions are not too bad. 
+- based on the means and medians, there is little evidence of a difference before and after the pandemic.
+
+
+
+
+
+
+
+- Plot by Site
+```{r}
+
+covid_gr_clinics_train_long %>% 
+  ggplot(aes(x=mood_score,fill=time_point)) + 
+  geom_histogram(position="dodge") +
+  facet_wrap(~site) +
+  ggtitle("Mood Before and During the Pandemic by Site")
+#results = "hide"
+```
+
+
+- Summary Stats by Site
+
+```{r message=FALSE}
+  summary_stats_by_site <- covid_gr_clinics_train_long %>%
+  group_by(site, time_point)
+  
+  #have to use awkward :: syntax because of some package overlap problem
+  summary_stats_by_site <- dplyr::summarise(summary_stats_by_site, n = n(), median = 
+                                             median(mood_score, na.rm = T),
+            mean = mean(mood_score, na.rm =T), sd = sd(mood_score, na.rm =T), 
+            quantile_25 = quantile(mood_score, probs = c(0.25)), 
+            quantile_75 = quantile(mood_score, probs = c(0.75)))
+
+summary_stats_by_site 
+```
+- Sites C and H have very few participants
+- Overall, there is very little increase though. The medians and means are nearly identical.
+
+
+
+- Plot by diagnosis
+```{r warnings = FALSE}
+covid_gr_clinics_train_long %>% 
+  ggplot(aes(x=mood_score,fill=time_point)) + 
+  geom_histogram(position="dodge") +
+  facet_wrap(~Diagnosis_FINAL_groups_revised)+
+   ggtitle("Mood Before and During the Pandemic by Diagnosis")
+```
+
+
+- Summary Stats by Diagnosis
+
+```{r message=FALSE}
+  summary_stats_by_diagnosis <- covid_gr_clinics_train_long %>%
+  group_by(Diagnosis_FINAL_groups_revised, time_point)
+  
+  #have to use awkward :: syntax because of some package overlap problem
+  summary_stats_by_diagnosis <- dplyr::summarise(summary_stats_by_diagnosis, n = n(), median = 
+                                             median(mood_score, na.rm = T),
+            mean = mean(mood_score, na.rm =T), sd = sd(mood_score, na.rm =T), 
+            quantile_25 = quantile(mood_score, probs = c(0.25)), 
+            quantile_75 = quantile(mood_score, probs = c(0.75)))
+
+summary_stats_by_diagnosis 
+```
+
+The diagnosis of mixed int/ext and ID are too few to consider. Again, there does not seem to be much variability by diagnosis either, with the possible exception of externalizing. 
+Also, it is interesting that the variability seems higher--the SD seems to be higher during the pandemic
+
+# Part II: Inferential Statistics
+
+**Question 1: Has mood state changed before and during the pandemic defined as change from 3mo to BL**
+
+
+- Q1 spaghetti plot overall
+```{r}
+# to make spaghetti plot visualisation better, subsample a set of observations
+set.seed(1234) # for reproducibility
+subsample_covid_gr_clinics_train_long  <- covid_gr_clinics_train_long[covid_gr_clinics_train_long$id %in%  sample(unique(covid_gr_clinics_train$id), 100),] # this is the sampling command
+
+
+spaghetti_1 <- subsample_covid_gr_clinics_train_long %>%
+ # filter(Subject <= 100) %>% 
+    ggplot(aes(x = time_point, y = mood_score,
+             group = as.factor(id))) +
+  geom_line()#+
+   #facet_grid( age_D~.)
+  #stat_summary( aes (group=1),geom = "point", fun = mean,
+   #                         shape = 17, size = 3, color = "red")
+spaghetti_1
+```
+This does not suggest that there is an increase in scores
+
+- Q1 boxplot of differences overall
+
+```{r}
+library(hrbrthemes)
+library(viridis)
+covid_gr_clinics_train_long %>%
+  ggplot( aes(x=time_point, y=mood_score)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme_ipsum() +
+    theme(
+      legend.position="right",
+      plot.title = element_text(size=14)
+    ) +
+    ggtitle("Mood in the pre-pandemic vs during the pandemic") +
+    xlab("")
+```
+
+Boxplot suggests there may be some increase during pandemic
+
+- Q1 A bootstrap paired t-test of the differences
+```{r}
+library(wBoot)
+set.seed(1234)
+boot.paired.per(covid_gr_clinics_train$MD_ST_3m, covid_gr_clinics_train$MD_ST_B,  null.hyp = NULL,
+                 R = 20000)
+```
+
+This shows that there are no differences overall.
+
+
+
+
+**Question 2: Has mood state changed before and during the pandemic defined as change from 3mo to BL, but differently by age group?**
+
+- This question is best answered by modeling the interaction between time and age group
+- This can be done as an ANCOVA or, preferably for reasons of flexibility, as a linear mixed effects model. Because we only have two time points, we cannot model both intercept and slope but can model random intercepts only. The fixed effects of such a model should be equivalent to what we get in the ANCOVA. 
+- Note, in the first instance we are not going to model site, to keep things simple. 
+
+
+- Q2: Visual Inspection
+
+```{r}
+library(hrbrthemes)
+library(viridis)
+covid_gr_clinics_train_long %>%
+  ggplot( aes(x=time_point, y=mood_score, color = age_D)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter(color="black", size=0.4, alpha=0.9) +
+    theme_ipsum() +
+    theme(
+      legend.position="right",
+      plot.title = element_text(size=14)
+    ) +
+    ggtitle("Mood in the pre-pandemic vs during the pandemic by age group") +
+    xlab("")
+```
+- there seem to be outliers for the pandemic in the under 12.
+- no other clear differences. 
+
+
+- Q2: Linear mixed effects model of age by time interaction
+```{r}
+lme_with_interaction <- lmer(mood_score ~ time_point*age_D + (1 | id), data = covid_gr_clinics_train_long)
+coefs <- data.frame(coef(summary(lme_with_interaction))) 
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
+```
+There is no significant effect of the interaction term
+
+- Q2: To illustrate the point, I also run this as an ANCOVA
+```{r}
+mood_model_with_age_interaction <- aov(mood_score ~  time_point*age_D,data = covid_gr_clinics_train_long)
+summary.lm(mood_model_with_age_interaction)
+```
+The results are very similar
+
+- Q2: now re-run LME with exclusion of outliers. First step, decide on value of outlier
+```{r}
+# in order to decide what is an outlier use the following
+quantile(covid_gr_clinics_train$MD_ST_B, 0.975)
+quantile(covid_gr_clinics_train$MD_ST_3m, 0.975)
+```
+This indicates that a value of 30 for baseline and 29 for pre-pandemic is appropriate
+
+
+- Q2: now re-run LME with exclusion of outliers. First step, decide on value of outlier
+```{r}
+# create new dataset with excluded outliers
+covid_gr_clinics_train_no_outliers <- covid_gr_clinics_train %>% 
+  filter(covid_gr_clinics_train$MD_ST_B <30 & covid_gr_clinics_train$MD_ST_3m <29)
+
+# Now turn it into long
+covid_gr_clinics_train_no_outliers_long <- gather(covid_gr_clinics_train_no_outliers, time_point, mood_score, MD_ST_B, MD_ST_3m)
+
+lme_with_interaction <- lmer(mood_score ~ time_point*age_D + (1 | id), data = covid_gr_clinics_train_no_outliers_long)
+coefs <- data.frame(coef(summary(lme_with_interaction))) 
+coefs$p.z <- 2 * (1 - pnorm(abs(coefs$t.value)))
+coefs
+```
+This too shows that once the outliers are excluded, there is no significant interaction term.
+
+- Q2 
+
+# Comments so far 
+- The interaction term seems week. 
+- It is probably even less important once outliers have been taken into account
+
+
+# Additional Analyses to assess inclusion of the interaction term
+
+- Q2: Linear mixed effects model **with bootstrap** in order to assess the value of including an interaction term into the model
+- we should consider three models. 
+- lme_time with time as the only predictor
+- lme_time_age with time and age as main effects
+- lme_time_age_interaction with time and age as main effects and their interaction
+
+
+- Q2: The base model, lme_time
+```{r}
+set.seed(1234)
+require(MuMIn) # this package allows you to get R-squareds (r.squaredGLMM, below)
+
+
+# this is a function to obtain the r-squared out of the bootstrapped LMEs
+rsq <- function(formula, data, indices) {
+  d <- data[indices,] 
+  model.fit <- lmer(mood_score ~ time_point  + (1 | id), data = d)
+  fit.r.squared <- r.squaredGLMM(model.fit)
+  return(fit.r.squared)
+}
+# now run the bootstrapped lme
+set.seed(1234)
+lme_time <- boot(data=covid_gr_clinics_train_long, statistic=rsq,
+                R=1000, formula=mood_score ~ time_point  + (1 | id))
+
+# now extract the vector with the R-squareds
+R2_lme_time <- lme_time[2]
+R2_lme_time <- R2_lme_time$t[,1]
+```
+
+
+- Q2: The next plausible model, lme_time_age
+```{r}
+rsq <- function(formula, data, indices) {
+  d <- data[indices,] 
+  model.fit <- lmer(mood_score ~ time_point  + age_D + (1 | id), data = d)
+  fit.r.squared <- r.squaredGLMM(model.fit)
+  return(fit.r.squared)
+}
+# now run the bootstrapped lme
+set.seed(1234)
+lme_time_age <- boot(data=covid_gr_clinics_train_long, statistic=rsq,
+                R=1000, formula=mood_score ~ time_point  + age_D + (1 | id))
+
+# now extract the vector with the R-squareds
+R2_lme_time_age <- lme_time_age[2]
+R2_lme_time_age <- R2_lme_time_age$t[,1]
+```
+
+
+
+- Q2: The interaction model
+```{r}
+rsq <- function(formula, data, indices) {
+  d <- data[indices,] 
+  model.fit <- lmer(mood_score ~ time_point*age_D + (1 | id), data = d)
+  fit.r.squared <- r.squaredGLMM(model.fit)
+  return(fit.r.squared)
+}
+# now run the bootstrapped lme
+set.seed(1234)
+lme_time_age_interaction <- boot(data=covid_gr_clinics_train_long, statistic=rsq,
+                R=1000, formula=mood_score ~ time_point*age_D + (1 | id))
+
+# now extract the vector with the R-squareds
+R2_lme_time_age_interaction <- lme_time_age_interaction[2]
+R2_lme_time_age_interaction <- R2_lme_time_age_interaction$t[,1]
+```
+
+
+- Q2: test the difference between the R-squared of the three models
+```{r}
+# first bind the vectors from each of the models above into a dataframe
+df_r_R2_lmes <-as.data.frame(cbind(R2_lme_time,R2_lme_time_age,R2_lme_time_age_interaction))
+
+# create a long dataframe for ease of plotting
+df_r_R2_lmes_long<- gather(df_r_R2_lmes, model, R2, R2_lme_time, R2_lme_time_age, R2_lme_time_age_interaction)
+
+# plot r-squared as violin plot
+# first you need to create a data summary function to feed into the violin plot
+data_summary <- function(x) {
+   mu <- mean(x)
+   sigma1 <- mu-sd(x)
+   sigma2 <- mu+sd(x)
+   return(c(y=mu,ymin=sigma1,ymax=sigma2))
+}
+
+# here is the violin plot
+ggplot(data=df_r_R2_lmes_long, aes(x=model, y=R2)) + 
+geom_violin() + stat_summary(fun.data=data_summary)
+
+```
+- Q2: Compare the R2s of the three models. I am doing this in a parametric and a non parametric way
+```{r}
+#now test the difference between the two R_squareds using an anova
+R2_anova <- aov(R2 ~ model, data = df_r_R2_lmes_long)
+# summary(R2_anova)
+TukeyHSD(R2_anova)
+
+# as the data seem to be slightly skewed particularly for the time-only model, use NP test
+kruskal.test(R2 ~ model, data = df_r_R2_lmes_long)
+
+# and follow up with
+
+
+wilcox.test(df_r_R2_lmes$R2_lme_time_age, df_r_R2_lmes$R2_lme_time_age_interaction)
+
+```
+On the basis of this analysis, the interaction model seems to be preferred. 
+
+
+
