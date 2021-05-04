@@ -16,13 +16,16 @@ Please see the conclusions at the end.
 
 
 ```{r, results="hide", message=FALSE}
+ #install.packages(c("dplyr", "ggplot2", "tidyverse", "patchwork", "tidyr", "rsample",
+ #                   "gplots", "lme4", "nlme", "psych", "cowplot", "lavaan", "semPlot", #"semTools", "wBoot", "hrbrthemes", "MuMIn"))
+
 library(dplyr)
 # library(data.table)
 library(ggplot2)
 # #library(SummarizedExperiment)
 # #library(ggstatsplot)
 # #library(ggpubr)
-library(tidyverse)
+#library(tidyverse)
 library(patchwork)
 library(tidyr)
 # library(broom)
@@ -48,6 +51,9 @@ library(cowplot)
 library(lavaan)
 library(semPlot)
 library(semTools)
+library(hrbrthemes)
+library(wBoot)
+library(MuMIn)
 results = "hide"
 ```
 
