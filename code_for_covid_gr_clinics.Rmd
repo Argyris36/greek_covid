@@ -80,7 +80,7 @@ I thought today that we should probably control for site when we do our analyses
 **import dataset that was sent to me on 26th April.**
 ```{r}
  # Make sure to change source to yours
-covid_gr_clinics <- read.csv("~/Downloads/COVIDparents_final_IOANNA_1_KK_AG.csv", sep=";", comment.char="#")
+covid_gr_clinics <- read.csv("~/Documents/greek_covid/COVIDparents_final_IOANNA_1_KK_AG.csv", sep=";", comment.char="#")
 ```
 
 **select variables to retain**
