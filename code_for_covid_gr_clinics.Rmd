@@ -305,6 +305,20 @@ boot.paired.per(covid_gr_clinics_train$MD_ST_3m, covid_gr_clinics_train$MD_ST_B,
 
 This shows that there are no differences overall.
 
+- An even nicer way of showing that there is no difference
+```{r}
+library(dabestr)
+set.seed(1234)
+bootstrap <- dabest(covid_gr_clinics_train_long,
+                    time_point,
+                    mood_score,
+                   idx = c("MD_ST_3m", "MD_ST_B"),
+                    paired = TRUE, id.col = id)
+ 
+bootstrap_diff <- mean_diff(bootstrap)
+ 
+plot(bootstrap_diff, color.column = site, rawplot.ylim = c(0, 40), effsize.ylim = c(-10,10))
+```
 
 
 
