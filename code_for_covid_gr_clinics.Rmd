@@ -259,7 +259,7 @@ Also, it is interesting that the variability seems higher--the SD seems to be hi
 ```{r}
 # to make spaghetti plot visualisation better, subsample a set of observations
 set.seed(1234) # for reproducibility
-subsample_covid_gr_clinics_train_long  <- covid_gr_clinics_train_long[covid_gr_clinics_train_long$id %in%  sample(unique(covid_gr_clinics_train$id), 100),] # this is the sampling command
+subsample_covid_gr_clinics_train_long  <- covid_gr_clinics_train_long[covid_gr_clinics_train_long$id %in%  sample(unique(covid_gr_clinics_train$id), 50),] # this is the sampling command
 
 
 spaghetti_1 <- subsample_covid_gr_clinics_train_long %>%
@@ -273,6 +273,16 @@ spaghetti_1 <- subsample_covid_gr_clinics_train_long %>%
 spaghetti_1
 ```
 This does not suggest that there is an increase in scores
+
+
+```{r}
+ids_for_plots <- sample(unique(covid_gr_clinics_train_long$id), 80, replace = FALSE, prob = NULL)
+subsample_for_plots <- subsample_covid_gr_clinics_train_long %>% 
+  filter(id %in% ids_for_plots)
+```
+
+
+
 
 - Q1 boxplot of differences overall
 
