@@ -317,7 +317,7 @@ bootstrap <- dabest(covid_gr_clinics_train_long,
  
 bootstrap_diff <- mean_diff(bootstrap)
  
-plot(bootstrap_diff, color.column = site, rawplot.ylim = c(0, 40), effsize.ylim = c(-10,10))
+plot(bootstrap_diff, rawplot.ylim = c(0, 40), effsize.ylim = c(-10,10))
 ```
 
 
