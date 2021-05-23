@@ -1,0 +1,173 @@
+---
+title: "code_for_covid_gr_clinics_with_updates"
+author: "Argyris Stringaris"
+date: "5/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, results="hide", message=FALSE}
+ #install.packages(c("dplyr", "ggplot2", "tidyverse", "patchwork", "tidyr", "rsample",
+ #                   "gplots", "lme4", "nlme", "psych", "cowplot", "lavaan", "semPlot", #"semTools", "wBoot", "hrbrthemes", "MuMIn"))
+
+library(dplyr)
+# library(data.table)
+library(ggplot2)
+# #library(SummarizedExperiment)
+# #library(ggstatsplot)
+# #library(ggpubr)
+#library(tidyverse)
+library(patchwork)
+library(tidyr)
+# library(broom)
+# library(broom.mixed)
+# library(gmodels)
+# library(ggthemes)
+# library(SuppDists)
+# library(questionr)
+library(rsample)
+# library(zoo)
+# library(pracma)
+# library(Metrics)
+library(gplots)
+# library(gmodels)
+ library(lme4)
+ library(nlme)
+# library(kableExtra)
+library(psych)
+# library(car)
+# library(eply)
+# library(sjmisc)
+library(cowplot)
+library(lavaan)
+library(semPlot)
+library(semTools)
+library(hrbrthemes)
+library(wBoot)
+library(MuMIn)
+results = "hide"
+```
+
+**import dataset that was sent to me on 26th April.**
+```{r}
+ # Make sure to change source to yours
+covid_gr_clinics <- read.csv("~/Documents/greek_covid/COVIDparents_final_IOANNA_1_KK_AG.csv", sep=";", comment.char="#")
+```
+
+**select variables to retain**
+```{r}
+covid_gr_clinics <- covid_gr_clinics%>%
+  select(id, family_id, MOOD_STATES_base, MOOD_STATES_3m, DAILY_BEHAVIORS_3M_KI_SUM,DAILY_BEHAVIORS_BASE_KI_SUM, age_D, site, Diagnosis_FINAL_groups_revised,       
+  Diagnosis_FINAL_groups_revised_rec)
+```
+
+
+**Rename the variables to make wrangling easier**
+```{r}
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, mood_baseline = MOOD_STATES_base)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, mood_3m = MOOD_STATES_3m)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, behaviours_baseline = DAILY_BEHAVIORS_BASE_KI_SUM)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, behaviours_3m = DAILY_BEHAVIORS_3M_KI_SUM)
+```
+
+**Split the dataset into a 60-40 for further work**
+```{r}
+set.seed(1234)
+split_covid_gr_clinics <- initial_split(covid_gr_clinics, 0.6)
+covid_gr_clinics_train <- training(split_covid_gr_clinics)
+covid_gr_clinics_test <- testing(split_covid_gr_clinics)
+```
+
+**Turn wide dataframe to long for plotting**
+```{r}
+
+
+# order to be able to see where you are
+covid_gr_clinics_train <- covid_gr_clinics_train[order(covid_gr_clinics_train$id),] 
+
+# this code allows you to turn into long multiple variables--break it down pipe-by-pipe to understand it better.
+covid_gr_clinics_train_long <- covid_gr_clinics_train %>% 
+  gather (key, val, c(mood_baseline, mood_3m, behaviours_baseline, behaviours_3m)) %>% 
+   separate(key, c("type", "time_point")) %>% 
+   spread(type, val)
+```
+
+**Some code to run multiple plots at once**
+```{r}
+
+# first a quick and dirty function to create an exploratory histogram--note [7] is the position of the time_point variable in the dataframe. This may change. It is not ideal this way, will change later
+explore_hist <- function(yvar){
+    ggplot(covid_gr_clinics_train_long, aes_(x=as.name(yvar))) +
+        geom_histogram(aes_string(fill = names(covid_gr_clinics_train_long[7])), position = "dodge") +
+        facet_wrap(~age_D) # again, facet wrapped by inputting the variable here--not good practice
+}
+
+# this allows you to get the plot over the variables. note [c(8,9)] is the position of the variables of interest in the dataset. They could be in a different position of course or be more
+lapply(names(covid_gr_clinics_train_long[c(8:9)]), explore_hist)
+
+# this double lapply allows you to get it over another set of levels, such as site in this example
+# the first lapply splits it all by site (or whatever else you wish), then you apply the lapply as above.
+lapply(split(covid_gr_clinics_train_long, covid_gr_clinics_train_long$site), function(x) lapply(names(covid_gr_clinics_train_long[c(8:9)]), explore_hist))
+```
+
+
+**A function to get bootstrapped mean differences on a large scale**
+```{r}
+# first gather the names of the variables you need and turn into a dataframe
+three_months <- names(covid_gr_clinics_train %>% select(ends_with("3m")))
+baseline <- names(covid_gr_clinics_train %>% select(ends_with("baseline")))
+
+df_3m_baseline <- as.data.frame(cbind(three_months, baseline))
+
+# write the function to extract the bootstrapped means
+doing_bootstrap_2 <- function (df, x, y) {
+  library(wBoot)
+set.seed(1234)
+bootstrap_result <-   boot.paired.per(df[, x], df[, y],  null.hyp = NULL,
+                 R = 10000)
+
+bootstrap_data <- bootstrap_result[[1]] # 
+
+return(bootstrap_data)
+}
+
+# apply the function over each pair (3m - baseline) of variables
+library(foreach)
+vec_bootstr_results <- as.data.frame(foreach(x = df_3m_baseline[, "three_months"], y = df_3m_baseline[, "baseline"],  .combine='cbind') %do% doing_bootstrap_2(df = covid_gr_clinics_train, x, y))
+
+# rename columns of the bootstrap results
+extract_column_names <- gsub("_.*$","",df_3m_baseline[,1])
+names(vec_bootstr_results)<-extract_column_names 
+vec_bootstr_results
+```
+
+
+** create a table with means, confidence intervals and p-values from the bootstrap**
+```{r}
+# create table with results
+vec_bootstr_results_means <- sapply(vec_bootstr_results, mean, 2)
+vec_bootstr_results_quantiles <- sapply(vec_bootstr_results, quantile, probs = c(0.025, 0.975), 2)
+vec_bootstr_results_table <- rbind(vec_bootstr_results_means, vec_bootstr_results_quantiles)
+vec_bootstr_results_table <- as.data.frame(as.matrix(t(vec_bootstr_results_table))) # this is to make it easier to read
+vec_bootstr_results_table <- vec_bootstr_results_table %>% 
+  rename (bootstrap_mean = vec_bootstr_results_means, conf_int_2.5 = "2.5%", conf_int_97.5= "97.5%")
+vec_bootstr_results_table
+```
+
+** visualise results by creating a separate graph for each column of the database**
+```{r}
+for (i in names(vec_bootstr_results)){
+  plt <-ggplot(vec_bootstr_results, aes_string(x=i))+
+         geom_histogram(binwidth = 0.0150) + 
+    geom_vline(xintercept = 0, size = 0.5, linetype = 'dashed',colour = "red") +
+    geom_vline(xintercept = mean(vec_bootstr_results[[i]]), colour = "blue") +
+    geom_vline(xintercept = quantile(vec_bootstr_results[[i]], probs = c(0.025, 0.975)), colour = "black", linetype = "dashed") +
+    ggtitle(names(vec_bootstr_results[i]))
+  print(plt)
+}
+```
+
