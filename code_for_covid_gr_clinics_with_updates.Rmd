@@ -142,7 +142,7 @@ vec_bootstr_results <- as.data.frame(foreach(x = df_3m_baseline[, "three_months"
 # rename columns of the bootstrap results
 extract_column_names <- gsub("_.*$","",df_3m_baseline[,1])
 names(vec_bootstr_results)<-extract_column_names 
-vec_bootstr_results
+#vec_bootstr_results
 ```
 
 
@@ -169,5 +169,127 @@ for (i in names(vec_bootstr_results)){
     ggtitle(names(vec_bootstr_results[i]))
   print(plt)
 }
+```
+```{r}
+explore_hist <- function (df  , x  , fill  , facet  )
+for (i in names(covid_gr_clinics_train_long[8:9])){
+  plt <-ggplot(covid_gr_clinics_train_long, aes_string(x=i))+
+         geom_histogram(aes_string(fill = names(covid_gr_clinics_train_long[7])), position = "dodge")+
+    facet_wrap(~age_D)+
+    ggtitle(names(covid_gr_clinics_train_long[i]))
+  print(plt)
+}
+```
+
+**a function to explore the variables in the dataset**
+```{r}
+explore_hist <- function (df, indices, fill){
+for (i in names(df[indices])){
+  plt <-ggplot(df, aes_string(x=i))+
+         geom_histogram(aes_string(fill = fill), position = "dodge")+
+          facet_wrap (~ age_D)+ # this is annoying, it won't accept an argument for some reason
+           ggtitle(names(df[i]))
+  print(plt)
+}
+}
+explore_hist(covid_gr_clinics_train_long, indices=c(8:9), fill = "time_point")
+
+
+```
+**Another nice way to visualise mood the pre-post**
+```{r}
+if (!require(remotes)) {
+  install.packages("remotes")
+}
+remotes::install_github('jorvlan/raincloudplots')
+
+library(raincloudplots)
+
+provisional_baseline_mood <- covid_gr_clinics_train_long %>% 
+  filter(time_point == "baseline") %>% 
+  select (mood, time_point) 
+
+provisional_baseline_mood$time_point <- recode(provisional_baseline_mood$time_point, "baseline" = 0)
+
+provisional_3m_mood <- covid_gr_clinics_train_long %>% 
+  filter(time_point == "3m") %>% 
+  select (mood, time_point)
+
+provisional_3m_mood$time_point <- recode(provisional_3m_mood$time_point, "3m" = 1)
+
+
+
+provisional_baseline_behaviours <- covid_gr_clinics_train_long %>% 
+  filter(time_point == "baseline") %>% 
+  select (behaviours, time_point) 
+
+provisional_baseline_behaviours$time_point <- recode(provisional_baseline_behaviours$time_point, "baseline" = 0)
+
+provisional_3m_behaviours <- covid_gr_clinics_train_long %>% 
+  filter(time_point == "3m") %>% 
+  select (behaviours, time_point)
+
+provisional_3m_behaviours$time_point <- recode(provisional_3m_behaviours$time_point, "3m" = 1)
+
+
+
+
+
+df_1x1_mood <- data_1x1(
+  array_1 = provisional_3m_mood[,1], 
+  array_2 = provisional_baseline_mood[,1],
+  jit_distance = 0.2,
+  jit_seed = 321)
+
+
+
+
+raincloud_2_aligned_mood <- raincloud_1x1_repmes(
+  data = df_1x1_mood,
+  colors = (c('dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  align_clouds = TRUE) +
+  
+  scale_x_continuous(breaks=c(1,2), labels=c("3 m Before Pandemic", "Baseline"), limits=c(0, 3)) +
+  xlab("Time Point") + 
+  ylab("Mood") +
+  theme_classic()
+
+raincloud_2_aligned_mood
+
+df_1x1_behaviours <- data_1x1(
+  array_1 = provisional_3m_behaviours[,1], 
+  array_2 = provisional_baseline_behaviours[,1],
+  jit_distance = 0.2,
+  jit_seed = 321)
+
+
+
+
+raincloud_2_aligned_behaviours <- raincloud_1x1_repmes(
+  data = df_1x1_behaviours,
+  colors = (c('dodgerblue', 'darkorange')),
+  fills = (c('dodgerblue', 'darkorange')),
+  line_color = 'gray',
+  line_alpha = .3,
+  size = 1,
+  alpha = .6,
+  align_clouds = TRUE) +
+  
+  scale_x_continuous(breaks=c(1,2), labels=c("3 m Before Pandemic", "Baseline"), limits=c(0, 3)) +
+  xlab("Time Point") + 
+  ylab("Behaviours") +
+  theme_classic()
+
+raincloud_2_aligned_behaviours
+
+
+
+library(patchwork)
+print(raincloud_2_aligned_behaviours / raincloud_2_aligned_mood)
 ```
 

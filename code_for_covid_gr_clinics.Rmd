@@ -92,7 +92,7 @@ covid_gr_clinics <- read.csv("~/Documents/greek_covid/COVIDparents_final_IOANNA_
 **select variables to retain**
 ```{r}
 covid_gr_clinics <- covid_gr_clinics%>%
-  select(id, family_id, MOOD_STATES_base, MOOD_STATES_3m, age_D, site, Diagnosis_FINAL_groups_revised,            
+  select(id, family_id, MOOD_STATES_base, MOOD_STATES_3m, DAILY_BEHAVIORS_3M_KI_SUM,DAILY_BEHAVIORS_BASE_KI_SUM, age_D, site, Diagnosis_FINAL_groups_revised,       
   Diagnosis_FINAL_groups_revised_rec)
 ```
 
@@ -101,6 +101,8 @@ covid_gr_clinics <- covid_gr_clinics%>%
 
 covid_gr_clinics <- dplyr::rename(covid_gr_clinics, MD_ST_B = MOOD_STATES_base)
 covid_gr_clinics <- dplyr::rename(covid_gr_clinics, MD_ST_3m = MOOD_STATES_3m)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, DL_BEH_B = DAILY_BEHAVIORS_BASE_KI_SUM)
+covid_gr_clinics <- dplyr::rename(covid_gr_clinics, DL_BEH_3m = DAILY_BEHAVIORS_3M_KI_SUM)
 ```
 
 
@@ -115,12 +117,18 @@ covid_gr_clinics_test <- testing(split_covid_gr_clinics)
 **Turn wide dataframe to long for plotting**
 ```{r}
 covid_gr_clinics_train_long<- gather(covid_gr_clinics_train, time_point, mood_score, MD_ST_B, MD_ST_3m)
+
+
+#covid_gr_clinics_train_long<- covid_gr_clinics_train %>% 
+ # gather (key, val, c(MD_ST_B, MD_ST_3m, DL_BEH_B, DL_BEH_3m))
 ```
 
-
+behavior_score, DL_BEH_B, DL_BEH_3m
 # PART I: Summary Statistics
 
 **Plot histogram of data by group and look at summary statistics**
+
+
 
 - Plot overall
 ```{r message=FALSE}
